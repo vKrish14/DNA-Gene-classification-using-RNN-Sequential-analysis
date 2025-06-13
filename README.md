@@ -12,7 +12,7 @@ TTGACCTTA...	E. coli
 
     label: Target class (e.g., bacterial species)
 
-⚙️ Project Features
+Project Features:
 
     Character-level encoding for DNA sequences
 
@@ -32,7 +32,7 @@ TTGACCTTA...	E. coli
 
     Optional K-Fold cross-validation
 
-🧠 Model Architecture
+Model Architecture :
 
 Input Sequence
      ↓
@@ -52,7 +52,6 @@ Dropout (0.3)
      ↓
 Softmax Output Layer (num_classes)
 
-🚀 How to Run
 1. Environment Setup
 
 Ensure you have the following libraries installed:
@@ -74,7 +73,7 @@ Run the script or notebook. It will:
 
     Optionally perform 5-fold cross-validation
 
-📊 Output Metrics
+Output Metrics
 
 Example evaluation output:
 
@@ -94,16 +93,16 @@ Confusion Matrix:
      E. coli │      5        43    │
              └───────────────┘
 
-📁 Directory Structure
+Directory Structure
 
 ├── 16s_sequences.csv       # Input dataset
 ├── main_model.py           # Deep learning pipeline script
 ├── README.md               # Project documentation
 
-🔄 Cross-Validation
+5-Fold Cross-Validation
 
 The script includes an optional 5-fold cross-validation step at the end, which evaluates model robustness across different data splits.
-🧪 Future Enhancements
+🧪 Future Enhancements:
 
     Incorporation of domain-specific embeddings (e.g., k-mer embeddings)
 
