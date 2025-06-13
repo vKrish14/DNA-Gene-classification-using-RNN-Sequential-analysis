@@ -1,0 +1,131 @@
+# %% [code]
+import tensorflow as tf
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix, classification_report
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Embedding, Bidirectional, LSTM, Dense, Dropout, Attention
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.callbacks import EarlyStopping
+from sklearn.model_selection import train_test_split, KFold
+from sklearn.preprocessing import LabelEncoder
+from sklearn.utils.class_weight import compute_class_weight
+
+# DATA LOADING & PREPROCESSING
+try:
+    data = pd.read_csv('16s_sequences.csv')  # Upload your dataset to Colab
+except FileNotFoundError:
+    raise FileNotFoundError("Please upload 16s_sequences.csv to Colab")
+
+sequences = data['sequence'].tolist()
+labels = data['label'].tolist()
+
+MAX_SEQ_LENGTH = max(len(seq) for seq in sequences)
+unique_chars = set(''.join(sequences))
+char_to_index = {char: idx+1 for idx, char in enumerate(sorted(unique_chars))}  # +1 for 0 padding
+VOCAB_SIZE = len(char_to_index)
+
+integer_encoded = [[char_to_index[char] for char in seq] for seq in sequences]
+padded_sequences = pad_sequences(integer_encoded, maxlen=MAX_SEQ_LENGTH, padding='post')
+
+label_encoder = LabelEncoder()
+encoded_labels = label_encoder.fit_transform(labels)
+
+class_weights = compute_class_weight('balanced', classes=np.unique(encoded_labels), y=encoded_labels)
+class_weight_dict = dict(enumerate(class_weights))
+
+
+# MODEL ARCHITECTURE
+
+def create_model():
+    inputs = Input(shape=(MAX_SEQ_LENGTH,))
+    x = Embedding(input_dim=VOCAB_SIZE + 1, output_dim=128)(inputs)
+    lstm_out = Bidirectional(LSTM(256, return_sequences=True))(x)
+    attention_out = Attention()([lstm_out, lstm_out])
+    x = Dropout(0.4)(attention_out)
+    x = Bidirectional(LSTM(128))(x)
+    x = Dense(128, activation='relu')(x)
+    x = Dropout(0.3)(x)
+    outputs = Dense(len(label_encoder.classes_), activation='softmax')(x)
+
+    model = Model(inputs, outputs)
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+        loss='sparse_categorical_crossentropy',
+        metrics=['accuracy']
+    )
+    return model
+
+# ----------------------
+# TRAINING WITH EARLY STOPPING
+# ----------------------
+early_stopping = EarlyStopping(
+    monitor='val_loss',
+    patience=5,
+    restore_best_weights=True
+)
+
+X_train, X_test, y_train, y_test = train_test_split(
+    padded_sequences, encoded_labels, test_size=0.2, random_state=42
+)
+
+model = create_model()
+history = model.fit(
+    X_train, y_train,
+    epochs=50,
+    batch_size=64,
+    validation_data=(X_test, y_test),
+    class_weight=class_weight_dict,
+    callbacks=[early_stopping],
+    verbose=1
+)
+
+
+# EVALUATION METRICS
+
+loss, accuracy = model.evaluate(X_test, y_test, verbose=0)
+print(f"\n✅ Final Test Accuracy: {accuracy * 100:.2f}%")
+
+# Predict labels
+y_pred_probs = model.predict(X_test)
+y_pred = np.argmax(y_pred_probs, axis=1)
+
+# Decode class labels
+class_names = label_encoder.classes_
+
+# ----------------------
+# CONFUSION MATRIX & REPORT
+# ----------------------
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred, target_names=class_names))
+
+cm = confusion_matrix(y_test, y_pred)
+
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
+            xticklabels=class_names,
+            yticklabels=class_names)
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.title("Confusion Matrix")
+plt.show()
+
+# K-FOLD TRAINING 
+
+kf = KFold(n_splits=5, shuffle=True)
+for fold, (train_idx, val_idx) in enumerate(kf.split(padded_sequences)):
+    print(f"\nTraining Fold {fold+1}")
+    X_train, X_val = padded_sequences[train_idx], padded_sequences[val_idx]
+    y_train, y_val = encoded_labels[train_idx], encoded_labels[val_idx]
+
+    model = create_model()
+    model.fit(
+        X_train, y_train,
+        validation_data=(X_val, y_val),
+        epochs=30,
+        batch_size=64,
+        callbacks=[early_stopping],
+        verbose=1
+    )
